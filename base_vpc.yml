@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: 2010-09-09
+#This is the CloudFormation template that will deploy the companies base VPC and all required resources.
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: 10.10.0.0/16
+      EnableDnsHostnames: true #Allow our resources within VPC to use DNS hostnames in addition to IP Addresses
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["VPC", !Ref "AWS::StackName"]]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: VPC
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+  
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.10.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ] #Select the first Availability Zone in the list available to the current region
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["Private", "Subnet", !Ref "AWS::StackName"]]
+      
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.10.100.0/24
+      AvailabilityZone: !Select [0, !GetAZs ] #Select the first Availability Zone in the list available to the current region
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["Private", "Subnet", !Ref "AWS::StackName"]]
+
+  #Public NAT Gateways require an Elastic IP Address
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+
+  #NAT gateway needed for our private subnet instances can connect to services outside of the VPC. 
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId #Our elastic ip address
+      ConnectivityType: public
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["NATGateway", !Ref "AWS::StackName"]]
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["Public", "RouteTable", !Ref "AWS::StackName"]]
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment #This resources requires a gateway attachment, this will ensure it's created first
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0 #The internet!
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+  
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["Private", "RouteTable", !Ref "AWS::StackName"]]
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment #This resources requires a gateway attachment, this will ensure it's created first
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0 #The internet!
+      NatGatewayId: !Ref NATGateway
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet
+
+  #Need to enable SSH access for resources that require it.
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      GroupName: !Join ['-', ["SecurityGroup", "SSH", !Ref "AWS::StackName"]]
+      GroupDescription: Enable SSH via port 22 access 
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+      VpcId: !Ref VPC
+
+  #The EC2 Jump Box. This will be used to SSH from the public subnet into the private subnet.
+  EC2JumpBox:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "ami-026b57f3c383c2eec"
+      InstanceType: t2.micro
+      SecurityGroupIds:
+      - !Ref SSHSecurityGroup
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["EC2", "JumpBox", !Ref "AWS::StackName"]]
+
+  #The EC2 application hosted in the private subnet
+  EC2Application:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "ami-026b57f3c383c2eec"
+      InstanceType: t2.micro
+      SecurityGroupIds:
+      - !Ref SSHSecurityGroup
+      SubnetId: !Ref PrivateSubnet
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["EC2", "Application", !Ref "AWS::StackName"]]
