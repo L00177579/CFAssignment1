@@ -1,0 +1,13 @@
+AWSTemplateFormatVersion: 2010-09-09
+#This is the CloudFormation template that will deploy the companies base VPC and all required resources.
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: 10.10.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["VPC", !Ref "AWS::StackName"]]
