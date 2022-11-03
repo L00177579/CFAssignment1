@@ -42,4 +42,100 @@ Resources:
         - Key: Name
           Value: !Join ['-', ["Private", "Subnet", !Ref "AWS::StackName"]]
 
+  #Public NAT Gateways require an Elastic IP Address
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
 
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId #Our elastic ip address
+      ConnectivityType: public
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["NATGateway", !Ref "AWS::StackName"]]
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["Public", "RouteTable", !Ref "AWS::StackName"]]
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment #This resources requires a gateway attachment, this will ensure it's created first
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0 #The internet!
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+  
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["Private", "RouteTable", !Ref "AWS::StackName"]]
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment #This resources requires a gateway attachment, this will ensure it's created first
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0 #The internet!
+      NatGatewayId: !Ref NATGateway
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet
+
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      GroupName: !Join ['-', ["SecurityGroup", "SSH", !Ref "AWS::StackName"]]
+      GroupDescription: Enable SSH via port 22 access 
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+      VpcId: !Ref VPC
+
+  #Our EC2 Instances
+  EC2JumpBox:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "ami-026b57f3c383c2eec"
+      InstanceType: t2.micro
+      SecurityGroupIds:
+      - !Ref SSHSecurityGroup
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["EC2", "JumpBox", !Ref "AWS::StackName"]]
+
+  EC2Application:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "ami-026b57f3c383c2eec"
+      InstanceType: t2.micro
+      SecurityGroupIds:
+      - !Ref SSHSecurityGroup
+      SubnetId: !Ref PrivateSubnet
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["EC2", "Application", !Ref "AWS::StackName"]]
