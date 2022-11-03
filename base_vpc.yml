@@ -6,8 +6,40 @@ Resources:
     Type: AWS::EC2::VPC
     Properties: 
       CidrBlock: 10.10.0.0/16
-      EnableDnsHostnames: true
+      EnableDnsHostnames: true #Allow our resources within VPC to use DNS hostnames in addition to IP Addresses
       EnableDnsSupport: true
       Tags:
         - Key: Name
           Value: !Join ['-', ["VPC", !Ref "AWS::StackName"]]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: VPC
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+  
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.10.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ] #Select the first Availability Zone in the list available to the current region
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["Private", "Subnet", !Ref "AWS::StackName"]]
+      
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.10.100.0/24
+      AvailabilityZone: !Select [0, !GetAZs ] #Select the first Availability Zone in the list available to the current region
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["Private", "Subnet", !Ref "AWS::StackName"]]
+
+
