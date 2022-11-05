@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: 2010-09-09
+#This template will deploy a subnet resource within a supplied VPC reference.
+
+#The regex pattern for the CIDR parameter looks for the digits 0-255 followed by a dot. This is repeated for a total of 3 times.
+#Then repeated once more minus the dot. Finally it looks for a forward slash and digits between 16-28. 28 is the smallest netmask and 
+#16 is the largest netmask supported by subnets in AWS.
+Parameters:
+  SubnetType:
+    Description: Is this a private or public subnet?
+    Type: String
+    Default: private
+    AllowedValues:
+      - private
+      - public
+    ConstraintDescription: SubnetType must be either set to "private" or "public".
+  VPCReference:
+    Description: Enter a reference to the subnet that requires routing.
+    Type: AWS::EC2::VPC::Id
+  InternetGatewayReference:
+    Description: Enter a reference to the subnet that requires routing.
+    Type: AWS::EC2::InternetGateway::Id
+  SelectAZ:
+    Description: Enter an integer to select an Availility Zone from the list returned by the function !GetAZs. Index starts at 0.
+    Type: Number
+    Default: 1
+    MaxValue: 2
+    MinValue: 0
+    ConstraintDescription: SelectAZ parameter must be within the range 0-2.
+  CreateNATAndEIP:
+    Description: Does the subnet require it's own NATGateway instance?
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Default: false
+  NATGatewayReference:
+    Description: Enter a reference to an existing NAT Gateway.
+    Type: AWS::EC2::NatGateway::Id
+    Default: ""
+  SubnetCidrBlock:
+    Description: >-
+      Enter a CIDR notated IP address for the subnet: X.X.X.X/16-28. E.g. 10.10.0.0/24
+    Type: String
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([1][6-9]|[2][0-8]))$
+    ConstraintDescription: SubnetCidrBlock parameter must be set to the following pattern X.X.X.X/16-28
+  RouteCidrBlock:
+    Description: >-
+      Enter a CIDR notated IP address for the route: X.X.X.X/16-28. E.g. 10.10.0.0/24
+    Type: String
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0]|[0-9]|[1][0-9]|[2][0-9]|[3][0-2]))$
+    ConstraintDescription: RouteCidrBlock parameter must be set to the following pattern X.X.X.X/0-32
+
+Conditions:
+  BuildNAT: !Equals [ !Ref CreateNATAndEIP, "true"] #Do we need to build a NAT Gateway on this subnet?
+  SetNATGateway: !Not [ !Equals [ !Ref NATGatewayReference, ""] ]
+
+Resources:
+  StackSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref SubnetCidrBlock
+      AvailabilityZone: !Select [!Ref SelectAZ, !GetAZs ] #Select the AZ based on the passed in SelectAZ parameter
+      VpcId: !Ref VPCReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref SubnetType, "Subnet", !Ref SelectAZ, !Ref "AWS::StackName"]]
+
+  #Public NAT Gateways require an Elastic IP Address
+  #Only assigned if required
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Condition: BuildNAT
+    Properties:
+      Domain: vpc
+
+  #NAT gateway needed for our private subnet instances can connect to services outside of the VPC. 
+  #Only builds if required
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: BuildNAT
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId #Our elastic ip address
+      ConnectivityType: public #We want to access the internet
+      SubnetId: !Ref StackSubnet
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["NATGateway", !Ref StackSubnet, !Ref "AWS::StackName"]]
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPCReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["Public", "RouteTable", !Ref StackSubnet, !Ref "AWS::StackName"]]
+
+  Route:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref RouteCidrBlock
+      GatewayId: !If [ !Not [!Or [ Condition: BuildNAT, Condition: SetNATGateway]], !Ref "AWS::NoValue", !Ref InternetGatewayReference ]
+      RouteTableId: !Ref RouteTable
+      NatGatewayId: !If [ !Or [Condition: BuildNAT, Condition: SetNATGateway], !Ref "AWS::NoValue", !If [ BuildNAT, !Ref NATGateway, !Ref NATGatewayReference ]]
+  
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref StackSubnet
+
+Outputs:
+  StackSubnet:
+    Description: Reference to the newly created VPC resource for use in the parent or other stacks.
+    Value: !Ref StackSubnet
+    Export: 
+      Name: !Join ['-', [!Ref SubnetType, "SubnetId", !Ref SelectAZ, !Ref "AWS::StackName"]]
+  StackNATGateway:
+    Description: Reference to the newly created VPC resource for use in the parent or other stacks.
+    Value: !Ref NATGateway
+    Export: 
+      Name: !Join ['-', [!Ref SubnetType, "NATGateway", !Ref SelectAZ, !Ref "AWS::StackName"]]
