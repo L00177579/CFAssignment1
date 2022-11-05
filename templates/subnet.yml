@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: 2010-09-09
 
 #The regex pattern for the CIDR parameter looks for the digits 0-255 followed by a dot. This is repeated for a total of 3 times.
 #Then repeated once more minus the dot. Finally it looks for a forward slash and digits between 16-28. 28 is the smallest netmask and 
-#16 is the largest netmask supported by subnets in AWS.
+#16 is the largest netmask supported by VPCs in AWS.
 Parameters:
   SubnetType:
     Description: Is this a private or public subnet?
@@ -17,8 +17,9 @@ Parameters:
     Description: Enter a reference to the subnet that requires routing.
     Type: AWS::EC2::VPC::Id
   InternetGatewayReference:
-    Description: Enter a reference to the subnet that requires routing.
+    Description: Enter a reference to an existing InternetGateway reference. If supplying a NATGateway reference leave this blank.
     Type: String
+    Default: ""
   SelectAZ:
     Description: Enter an integer to select an Availility Zone from the list returned by the function !GetAZs. Index starts at 0.
     Type: Number
@@ -34,7 +35,7 @@ Parameters:
       - false
     Default: false
   NATGatewayReference:
-    Description: Enter a reference to an existing NAT Gateway.
+    Description: Enter a reference to an existing NAT Gateway. If supplying a InternetGateway reference leave this blank.
     Type: String
     Default: ""
   SubnetCidrBlock:
@@ -45,7 +46,7 @@ Parameters:
     ConstraintDescription: SubnetCidrBlock parameter must be set to the following pattern X.X.X.X/16-28
   RouteCidrBlock:
     Description: >-
-      Enter a CIDR notated IP address for the route: X.X.X.X/16-28. E.g. 10.10.0.0/24
+      Enter a CIDR notated IP address for the route: X.X.X.X/0-32. E.g. 10.10.0.0/24
     Type: String
     AllowedPattern: >-
       ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0]|[0-9]|[1][0-9]|[2][0-9]|[3][0-2]))$
@@ -53,8 +54,8 @@ Parameters:
 
 Conditions:
   BuildNAT: !Equals [ !Ref CreateNATAndEIP, "true" ]
-  UsingNAT: !Or [ !Not [ !Equals [ !Ref NATGatewayReference, "" ] ], !Equals [ !Ref CreateNATAndEIP, "true" ] ]
-  DontUseNATGateway: !And [ !Equals [ !Ref NATGatewayReference, "" ], !Equals [ !Ref CreateNATAndEIP, "false" ] ]
+  UseNATGateway: !And [ !Not [ !Equals [ !Ref NATGatewayReference, "" ] ], !Equals [ !Ref InternetGatewayReference, "" ] ]
+  UseInternetGateway: !And [ !Equals [ !Ref NATGatewayReference, "" ], !Not [ !Equals [ !Ref InternetGatewayReference, "" ] ] ]
   UseNATReference: !And [ !Not [ !Equals [ !Ref NATGatewayReference, "" ] ], !Equals [ !Ref CreateNATAndEIP, "false" ] ]
 
 Resources:
@@ -101,9 +102,9 @@ Resources:
     Type: AWS::EC2::Route
     Properties:
       DestinationCidrBlock: !Ref RouteCidrBlock
-      GatewayId: !If [ DontUseNATGateway, !Ref InternetGatewayReference, !Ref "AWS::NoValue" ]
+      GatewayId: !If [ UseInternetGateway, !Ref InternetGatewayReference, !Ref "AWS::NoValue" ]
       RouteTableId: !Ref RouteTable
-      NatGatewayId: !If [ UsingNAT, !If [ UseNATReference, !Ref NATGatewayReference, !Ref NATGateway ], !Ref "AWS::NoValue" ]
+      NatGatewayId: !If [ UseNATGateway, !If [ UseNATReference, !Ref NATGatewayReference, !Ref NATGateway ], !Ref "AWS::NoValue" ]
   
   SubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
