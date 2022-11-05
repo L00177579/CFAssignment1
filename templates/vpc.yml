@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: 2010-09-09
+#This template will deploy a VPC, InternetGateway and VPCGatewayAttachment resource.
+#A VPC requires an Internet Gateway.
+
+Parameters:
+  #The regex pattern for the CIDR parameter looks for the digits 0-255 followed by a dot. This is repeated for a total of 3 times.
+  #Then repeated once more minus the dot. Finally it looks for a forward slash and digits between 16-28. 28 is the smallest netmask and 
+  #16 is the largest netmask supported by subnets in AWS.
+  VPCCidrBlock:
+    Description: >-
+      Enter a CIDR notated IP address for the VPC: X.X.X.X/16-28. E.g. 10.10.0.0/16
+    Type: String
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([1][6-9]|[2][0-8]))$
+    ConstraintDescription: VPCCidrBlock parameter must be set to the following pattern X.X.X.X/16-28
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: !Ref VPCCidrBlock
+      EnableDnsHostnames: true #Allow our resources within VPC to use DNS hostnames in addition to IP Addresses
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["VPC", !Ref "AWS::StackName"]]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: VPC
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["InternetGateway", !Ref "AWS::StackName"]]
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+Outputs:
+  VPCReference:
+    Description: Reference to the newly created VPC resource for use in the parent or other stacks.
+    Value: !Ref VPC
+    Export: 
+      Name: !Join ['-', ["VpcId", !Ref "AWS::StackName"]]
+  InternetGatewayReference:
+    Description: Reference to the newly created InternetGateway resource for use in the parent or other stacks.
+    Value: !Ref InternetGateway
+    Export: 
+      Name: !Join ['-', ["InternetGatewayId", !Ref "AWS::StackName"]]
