@@ -18,7 +18,7 @@ Parameters:
     Type: AWS::EC2::VPC::Id
   InternetGatewayReference:
     Description: Enter a reference to the subnet that requires routing.
-    Type: AWS::EC2::InternetGateway::Id
+    Type: String
   SelectAZ:
     Description: Enter an integer to select an Availility Zone from the list returned by the function !GetAZs. Index starts at 0.
     Type: Number
@@ -35,7 +35,7 @@ Parameters:
     Default: false
   NATGatewayReference:
     Description: Enter a reference to an existing NAT Gateway.
-    Type: AWS::EC2::NatGateway::Id
+    Type: String
     Default: ""
   SubnetCidrBlock:
     Description: >-
@@ -52,8 +52,10 @@ Parameters:
     ConstraintDescription: RouteCidrBlock parameter must be set to the following pattern X.X.X.X/0-32
 
 Conditions:
-  UseNATGateway: !And [ !Not [ !Equals [ !Ref NATGatewayReference, "" ] ], !Equals [ !Ref CreateNATAndEIP, "false" ] ]
-  UseNATReference: !And [ !Equals [ !Ref NATGatewayReference, "" ], !Equals [ !Ref CreateNATAndEIP, "false" ] ]
+  BuildNAT: !Equals [ !Ref CreateNATAndEIP, "true" ]
+  UsingNAT: !Or [ !Not [ !Equals [ !Ref NATGatewayReference, "" ] ], !Equals [ !Ref CreateNATAndEIP, "true" ] ]
+  DontUseNATGateway: !And [ !Equals [ !Ref NATGatewayReference, "" ], !Equals [ !Ref CreateNATAndEIP, "false" ] ]
+  UseNATReference: !And [ !Not [ !Equals [ !Ref NATGatewayReference, "" ] ], !Equals [ !Ref CreateNATAndEIP, "false" ] ]
 
 Resources:
   StackSubnet:
@@ -99,9 +101,9 @@ Resources:
     Type: AWS::EC2::Route
     Properties:
       DestinationCidrBlock: !Ref RouteCidrBlock
-      GatewayId: !If [ !Not [ Condition: UseNATGateway ], !Ref InternetGatewayReference, !Ref "AWS::NoValue" ]
+      GatewayId: !If [ DontUseNATGateway, !Ref InternetGatewayReference, !Ref "AWS::NoValue" ]
       RouteTableId: !Ref RouteTable
-      NatGatewayId: !If [ Condition: UseNATGateway, !If [ Condition: UseNATReference, !Ref NATGatewayReference, !Ref NATGateway ], !Ref "AWS::NoValue" ]
+      NatGatewayId: !If [ UsingNAT, !If [ UseNATReference, !Ref NATGatewayReference, !Ref NATGateway ], !Ref "AWS::NoValue" ]
   
   SubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -117,6 +119,7 @@ Outputs:
       Name: !Join ['-', [!Ref SubnetType, "SubnetId", !Ref SelectAZ, !Ref "AWS::StackName"]]
   StackNATGateway:
     Description: Reference to the newly created VPC resource for use in the parent or other stacks.
+    Condition: BuildNAT
     Value: !Ref NATGateway
     Export: 
       Name: !Join ['-', [!Ref SubnetType, "NATGateway", !Ref SelectAZ, !Ref "AWS::StackName"]]
