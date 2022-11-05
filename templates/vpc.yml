@@ -2,10 +2,10 @@ AWSTemplateFormatVersion: 2010-09-09
 #This template will deploy a VPC, InternetGateway and VPCGatewayAttachment resource.
 #A VPC requires an Internet Gateway.
 
-#The regex pattern for the CIDR parameter looks for the digits 0-255 followed by a dot. This is repeated for a total of 3 times.
-#Then repeated once more minus the dot. Finally it looks for a forward slash and digits between 16-28. 28 is the smallest netmask and 
-#16 is the largest netmask supported by subnets in AWS.
 Parameters:
+  #The regex pattern for the CIDR parameter looks for the digits 0-255 followed by a dot. This is repeated for a total of 3 times.
+  #Then repeated once more minus the dot. Finally it looks for a forward slash and digits between 16-28. 28 is the smallest netmask and 
+  #16 is the largest netmask supported by subnets in AWS.
   VPCCidrBlock:
     Description: >-
       Enter a CIDR notated IP address for the VPC: X.X.X.X/16-28. E.g. 10.10.0.0/16

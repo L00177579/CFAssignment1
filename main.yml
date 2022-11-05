@@ -27,16 +27,44 @@ Parameters:
     Type: String
     Default: SSHKey
   EC2ImageId:
-    Description: The Image Id
+    Description: The AMI for the EC2 instances; region based. Keep entry blank to attempt to automatically apply AMI based on region.
     Type: String
-    Default: ami-026b57f3c383c2eec
+    Default: ""
   EC2InstanceType:
-    Description: s3 Bucket URL for the Subnet cloud formation template.
+    Description: >-
+      Enter one of the default sizes: t1.micro or t2.micro. The default is set as t2.micro.
     Type: String
-    Default: ami-026b57f3c383c2eec
+    Default: t2.micro
+    AllowedValues:
+      - t1.micro
+      - t2.micro
+    ConstraintDescription: >-
+      Only t1.micro or t2.micro is available (Due to costs).
+
+Mappings:
+  #Just a handful of regions too many to list but additional entries can be added as needed.
+  #Can be overridden by using the EC2ImageId parameter.
+  #These are free tier AMIs if using the t1.micro or t2.micro instance types.
+  AMIRegionImage:
+    eu-west-1: #Ireland
+      AMIId: "ami-0ee415e1b8b71305f"
+    eu-central-1: #Frankfurt
+      AMIId: "ami-070b208e993b59cea"
+    us-east-1: #N. Virginia
+      AMIId: "ami-09d3b3274b6c5d4aa"
+    us-east-2: #Ohio
+      AMIId: "ami-089a545a9ed9893b6"
+    us-west-1: #N. California
+      AMIId: "ami-017c001a88dd93847"
+    us-west-2: #Oregon
+      AMIId: "ami-0d593311db5abb72b"
+  
+Conditions:
+  FindAMIByRegion: !Equals [ !Ref EC2ImageId, "" ] #Condition to use the Mapping instead of the passed in value
 
 Resources:
-  #Our VPC nested stack
+  #Our VPC stack.
+  #This will output a VPC Id reference and an InternetGateway Id reference.
   VPCStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -44,7 +72,9 @@ Resources:
       Parameters:
         VPCCidrBlock: 10.10.0.0/16
 
-  #Our subnet stack
+  #The first public subnet.
+  #This subnet will create the the NAT Gateway to be used by the private subnets.
+  #This NAT Gateway will be returned as an output.
   PublicSubnet1:
     Type: AWS::CloudFormation::Stack
     DependsOn: VPCStack
@@ -126,9 +156,9 @@ Resources:
   EC2JumpBox:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref EC2ImageId
+      ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
       KeyName: !Ref SSHKeyJumpBox #Needed to authenticate onto this EC2 instance via SSH
-      InstanceType: t2.micro
+      InstanceType: !Ref EC2InstanceType
       NetworkInterfaces:
       - DeviceIndex: '0'
         SubnetId: !GetAtt PublicSubnet1.Outputs.StackSubnet
@@ -143,9 +173,9 @@ Resources:
   EC2Application:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref EC2ImageId
+      ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
       KeyName: !Ref SSHKeyApplication #Needed to authenticate onto this EC2 instance via SSH
-      InstanceType: t2.micro
+      InstanceType: !Ref EC2InstanceType
       NetworkInterfaces:
       - DeviceIndex: '0'
         SubnetId: !GetAtt PrivateSubnet1.Outputs.StackSubnet
@@ -155,30 +185,29 @@ Resources:
         - Key: Name
           Value: !Join ['-', ["EC2", "Application", !Ref "AWS::StackName"]]
 
-    #The EC2 Jump Box. This will be used to SSH from the public subnet into the private subnet.
+  #Front end hosted in the public subnet
   EC2FrontEnd:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref EC2ImageId
+      ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
       KeyName: !Ref SSHKeyFrontEnd #Needed to authenticate onto this EC2 instance via SSH
-      InstanceType: t2.micro
+      InstanceType: !Ref EC2InstanceType
       NetworkInterfaces:
       - DeviceIndex: '0'
         SubnetId: !GetAtt PublicSubnet2.Outputs.StackSubnet
         AssociatePublicIpAddress: true #ensure it has an public facing IP Address
         GroupSet: [ !Ref SSHPublicSecurityGroup ]
-      
       Tags:
         - Key: Name
-          Value: !Join ['-', ["EC2", "JumpBox", !Ref "AWS::StackName"]]
+          Value: !Join ['-', ["EC2", "FrontEnd", !Ref "AWS::StackName"]]
 
   #The EC2 application hosted in the private subnet
   EC2Database:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref EC2ImageId
+      ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ]
       KeyName: !Ref SSHKeyDatabase #Needed to authenticate onto this EC2 instance via SSH
-      InstanceType: t2.micro
+      InstanceType: !Ref EC2InstanceType
       NetworkInterfaces:
       - DeviceIndex: '0'
         SubnetId: !GetAtt PrivateSubnet2.Outputs.StackSubnet
@@ -186,4 +215,4 @@ Resources:
         GroupSet: [ !Ref SSHPublicSecurityGroup ] 
       Tags:
         - Key: Name
-          Value: !Join ['-', ["EC2", "Application", !Ref "AWS::StackName"]]
+          Value: !Join ['-', ["EC2", "Database", !Ref "AWS::StackName"]]
