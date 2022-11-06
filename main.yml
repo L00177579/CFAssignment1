@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: 2010-09-09
 #This is the CloudFormation template that will deploy the companies base VPC and all required resources.
-
+#4 subnets, 2 private/2 public. 1 NAT Gateway.
+#4 EC2 instances, JumpBox, Database, Front End, Application
 Parameters:
   VPCTemplateURL:
     Description: s3 Bucket URL for the VPC cloud formation template.
@@ -11,19 +12,19 @@ Parameters:
     Type: String
     Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/subnet.yml
   JumpBoxEC2TemplateURL:
-    Description: s3 Bucket URL for the VPC cloud formation template.
+    Description: s3 Bucket URL for the Jump Box cloud formation template.
     Type: String
     Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/jumpbox.yml
   ApplicationEC2TemplateURL:
-    Description: s3 Bucket URL for the Subnet cloud formation template.
+    Description: s3 Bucket URL for the Application cloud formation template.
     Type: String
     Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/application.yml
   DBEC2TemplateURL:
-    Description: s3 Bucket URL for the VPC cloud formation template.
+    Description: s3 Bucket URL for the DB cloud formation template.
     Type: String
     Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/database.yml
   FrontEndEC2TemplateURL:
-    Description: s3 Bucket URL for the Subnet cloud formation template.
+    Description: s3 Bucket URL for the Front End cloud formation template.
     Type: String
     Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/frontend.yml
   MySQLSecurityGroupTemplateURL:
@@ -109,8 +110,6 @@ Resources:
         SubnetCidrBlock: 10.10.3.0/24
         RouteCidrBlock: 0.0.0.0/0
 
-
-  #This private subnet will return a reference to its created NAT Gateway
   PrivateSubnet1:
     Type: AWS::CloudFormation::Stack
     DependsOn: VPCStack
@@ -125,7 +124,6 @@ Resources:
         SubnetCidrBlock: 10.10.1.0/24
         RouteCidrBlock: 0.0.0.0/0
 
-  #Our subnet stack
   PrivateSubnet2:
     Type: AWS::CloudFormation::Stack
     DependsOn: VPCStack
@@ -140,7 +138,6 @@ Resources:
         SubnetCidrBlock: 10.10.2.0/24
         RouteCidrBlock: 0.0.0.0/0
 
-  #Our subnet stack
   PublicSubnet2:
     Type: AWS::CloudFormation::Stack
     DependsOn: VPCStack
@@ -154,7 +151,6 @@ Resources:
         CreateNATAndEIP: false
         SubnetCidrBlock: 10.10.4.0/24
         RouteCidrBlock: 0.0.0.0/0
-
 
   #MySQL Security Group
   MySQLSG:

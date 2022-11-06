@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: 2010-09-09
 #This template will deploy an EC2 instance for hosting a front end web server.
 #This templates expects a Jump Box Security group used to SSH into the instance.
+#This template also expects a security group based on the database that will be hosted.
 
 Parameters:
   VPCReference:
@@ -65,6 +66,9 @@ Resources:
           IpProtocol: tcp
           ToPort: 443
       VpcId: !Ref VPCReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["FrontEndEC2", "SecurityGroup", !Ref "AWS::StackName"]]
 
   #Front end hosted in the public subnet
   EC2FrontEnd:
@@ -79,7 +83,7 @@ Resources:
         AssociatePublicIpAddress: true #ensure it has an public facing IP Address
         GroupSet: 
           - !Ref FrontEndSecurityGroup
-          - !Ref OutboundDBSecurityGroupReference
+          - !Ref OutboundDBSecurityGroupReference #the outbound security group for the database.
       Tags:
         - Key: Name
           Value: !Join ['-', ["EC2", "FrontEnd", !Ref "AWS::StackName"]]

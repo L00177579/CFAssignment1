@@ -46,6 +46,9 @@ Resources:
           IpProtocol: tcp
           ToPort: 22
       VpcId: !Ref VPCReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["JumpBoxEC2", "SecurityGroup", !Ref "AWS::StackName"]]
 
   EC2JumpBox:
     Type: AWS::EC2::Instance

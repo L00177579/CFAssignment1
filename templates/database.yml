@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: 2010-09-09
-#This template will deploy an EC2 instance for hosting an application.
+#This template will deploy an EC2 instance for hosting the database.
 #This templates expects a Jump Box Security group used to SSH into the instance.
+#This template also expects a security group based on the database that will be hosted.
 
 Parameters:
   VPCReference:
@@ -30,7 +31,7 @@ Parameters:
     Description: Enter a reference to the jump box security group that needs SSH access.
     Type: String
   InboundDatabaseSecurityGroupReference:
-    Description: Enter a reference to the front end security group the database requires.
+    Description: Enter a reference to the security group the database requires.
     Type: String
 
 Resources:
@@ -56,6 +57,9 @@ Resources:
           IpProtocol: tcp
           ToPort: 443
       VpcId: !Ref VPCReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["DBEC2", "SecurityGroup", !Ref "AWS::StackName"]]
 
   #The EC2 application hosted in the private subnet
   EC2Database:
@@ -70,7 +74,7 @@ Resources:
         AssociatePublicIpAddress: false
         GroupSet: 
           - !Ref DBSecurityGroup
-          - !Ref InboundDatabaseSecurityGroupReference
+          - !Ref InboundDatabaseSecurityGroupReference #the inbound security group for the database.
       Tags:
         - Key: Name
           Value: !Join ['-', ["EC2", "Database", !Ref "AWS::StackName"]]
