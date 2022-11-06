@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: 2010-09-09
+#This template will deploy an EC2 instance for hosting a front end web server.
+#This templates expects a Jump Box Security group used to SSH into the instance.
+
+Parameters:
+  VPCReference:
+    Description: Enter a reference to the subnet that requires routing.
+    Type: AWS::EC2::VPC::Id
+  SubnetReference:
+    Description: Enter a reference to an existing Subnet Id.
+    Type: String
+  EC2InstanceType:
+    Description: >-
+      Enter one of the default sizes: t1.micro or t2.micro. The default is set as t2.micro.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t1.micro
+      - t2.micro
+    ConstraintDescription: >-
+      Only t1.micro or t2.micro is available (Due to costs).
+  SSHKeyName:
+    Description: Name of the SSH Key Pair for the EC2 Jump Box Instance
+    Type: String
+    Default: SSHKey
+  EC2ImageId:
+    Description: The AMI for the EC2 instances; region based. Keep entry blank to attempt to automatically apply AMI based on region.
+    Type: String
+  JumpBoxSecurityGroupReference:
+    Description: Enter a reference to the jump box security group that needs SSH access.
+    Type: String
+  OutboundDBSecurityGroupReference:
+    Description: Enter a reference to the database security group the front end requires.
+    Type: String
+
+Resources:
+  #Front end requires inbound and outbound HTTP and HTTPS ports.
+  #Requires database access to the MySQL DB.
+  #And in addition SSH access from the jump box.
+  FrontEndSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join ['-', ["SecurityGroup", "FrontEnd", !Ref "AWS::StackName"]]
+      GroupDescription: Security Group Requirements for the Front End.
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref JumpBoxSecurityGroupReference #Reference the security group, any additional jump boxes will then be allowed to SSH in.
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0 #HTTP
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0 #HTTPS
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0 #HTTP
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0 #HTTPS
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      VpcId: !Ref VPCReference
+
+  #Front end hosted in the public subnet
+  EC2FrontEnd:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref EC2ImageId
+      KeyName: !Ref SSHKeyName #Needed to authenticate onto this EC2 instance via SSH
+      InstanceType: !Ref EC2InstanceType
+      NetworkInterfaces:
+      - DeviceIndex: '0'
+        SubnetId: !Ref SubnetReference
+        AssociatePublicIpAddress: true #ensure it has an public facing IP Address
+        GroupSet: 
+          - !Ref FrontEndSecurityGroup
+          - !Ref OutboundDBSecurityGroupReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["EC2", "FrontEnd", !Ref "AWS::StackName"]]
+
+Outputs:
+  StackFrontEndSecurityGroup:
+    Description: Reference to the newly created Front End Security Group resource for use in the parent or other stacks.
+    Value: !Ref FrontEndSecurityGroup
+    Export: 
+      Name: !Join ['-', ["FrontEndSG", !Ref "AWS::StackName"]]
