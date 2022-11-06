@@ -10,6 +10,26 @@ Parameters:
     Description: s3 Bucket URL for the Subnet cloud formation template.
     Type: String
     Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/subnet.yml
+  JumpBoxEC2TemplateURL:
+    Description: s3 Bucket URL for the VPC cloud formation template.
+    Type: String
+    Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/jumpbox.yml
+  ApplicationEC2TemplateURL:
+    Description: s3 Bucket URL for the Subnet cloud formation template.
+    Type: String
+    Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/application.yml
+  DBEC2TemplateURL:
+    Description: s3 Bucket URL for the VPC cloud formation template.
+    Type: String
+    Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/database.yml
+  FrontEndEC2TemplateURL:
+    Description: s3 Bucket URL for the Subnet cloud formation template.
+    Type: String
+    Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/frontend.yml
+  MySQLSecurityGroupTemplateURL:
+    Description: s3 Bucket URL for the MySQL Security Group cloud formation template.
+    Type: String
+    Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/mysql_sg.yml
   SSHKeyJumpBox:
     Description: Name of the SSH Key Pair for the EC2 Jump Box Instance
     Type: String
@@ -135,84 +155,66 @@ Resources:
         SubnetCidrBlock: 10.10.4.0/24
         RouteCidrBlock: 0.0.0.0/0
 
-  #Need to enable SSH access for resources that require it.
-  SSHPublicSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+
+  #MySQL Security Group
+  MySQLSG:
+    Type: AWS::CloudFormation::Stack
     DependsOn: VPCStack
     Properties:
-      GroupName: !Join ['-', ["SecurityGroup", "SSH", !Ref "AWS::StackName"]]
-      GroupDescription: Enable SSH via port 22 access 
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          FromPort: 22
-          IpProtocol: tcp
-          ToPort: 22
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-      VpcId: !GetAtt VPCStack.Outputs.VPCReference
+      TemplateURL: !Ref MySQLSecurityGroupTemplateURL
+      Parameters:
+        VPCReference: !GetAtt VPCStack.Outputs.VPCReference
 
-  #The EC2 Jump Box. This will be used to SSH from the public subnet into the private subnet.
-  EC2JumpBox:
-    Type: AWS::EC2::Instance
+  EC2JumpBox1:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
     Properties:
-      ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
-      KeyName: !Ref SSHKeyJumpBox #Needed to authenticate onto this EC2 instance via SSH
-      InstanceType: !Ref EC2InstanceType
-      NetworkInterfaces:
-      - DeviceIndex: '0'
-        SubnetId: !GetAtt PublicSubnet1.Outputs.StackSubnet
-        AssociatePublicIpAddress: true #ensure it has an public facing IP Address
-        GroupSet: [ !Ref SSHPublicSecurityGroup ]
-      
-      Tags:
-        - Key: Name
-          Value: !Join ['-', ["EC2", "JumpBox", !Ref "AWS::StackName"]]
+      TemplateURL: !Ref JumpBoxEC2TemplateURL
+      Parameters:
+        VPCReference: !GetAtt VPCStack.Outputs.VPCReference
+        SubnetReference: !GetAtt PublicSubnet1.Outputs.StackSubnet
+        EC2InstanceType: !Ref EC2InstanceType
+        SSHKeyName: !Ref SSHKeyJumpBox
+        EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
 
-  #The EC2 application hosted in the private subnet
-  EC2Application:
-    Type: AWS::EC2::Instance
+  EC2Application1:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
     Properties:
-      ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
-      KeyName: !Ref SSHKeyApplication #Needed to authenticate onto this EC2 instance via SSH
-      InstanceType: !Ref EC2InstanceType
-      NetworkInterfaces:
-      - DeviceIndex: '0'
-        SubnetId: !GetAtt PrivateSubnet1.Outputs.StackSubnet
-        AssociatePublicIpAddress: false
-        GroupSet: [ !Ref SSHPublicSecurityGroup ] 
-      Tags:
-        - Key: Name
-          Value: !Join ['-', ["EC2", "Application", !Ref "AWS::StackName"]]
+      TemplateURL: !Ref ApplicationEC2TemplateURL
+      Parameters:
+        VPCReference: !GetAtt VPCStack.Outputs.VPCReference
+        SubnetReference: !GetAtt PrivateSubnet1.Outputs.StackSubnet
+        EC2InstanceType: !Ref EC2InstanceType
+        SSHKeyName: !Ref SSHKeyApplication
+        EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
+        JumpBoxSecurityGroupReference: !GetAtt EC2JumpBox1.Outputs.StackJumpBoxSecurityGroup
 
-  #Front end hosted in the public subnet
-  EC2FrontEnd:
-    Type: AWS::EC2::Instance
+  EC2Database1:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
     Properties:
-      ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
-      KeyName: !Ref SSHKeyFrontEnd #Needed to authenticate onto this EC2 instance via SSH
-      InstanceType: !Ref EC2InstanceType
-      NetworkInterfaces:
-      - DeviceIndex: '0'
-        SubnetId: !GetAtt PublicSubnet2.Outputs.StackSubnet
-        AssociatePublicIpAddress: true #ensure it has an public facing IP Address
-        GroupSet: [ !Ref SSHPublicSecurityGroup ]
-      Tags:
-        - Key: Name
-          Value: !Join ['-', ["EC2", "FrontEnd", !Ref "AWS::StackName"]]
+      TemplateURL: !Ref DBEC2TemplateURL
+      Parameters:
+        VPCReference: !GetAtt VPCStack.Outputs.VPCReference
+        SubnetReference: !GetAtt PrivateSubnet1.Outputs.StackSubnet
+        EC2InstanceType: !Ref EC2InstanceType
+        SSHKeyName: !Ref SSHKeyDatabase
+        EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
+        JumpBoxSecurityGroupReference: !GetAtt EC2JumpBox1.Outputs.StackJumpBoxSecurityGroup
+        InboundDatabaseSecurityGroupReference: !GetAtt MySQLSG.Outputs.StackMySQLInboundSecurityGroup
 
-  #The EC2 application hosted in the private subnet
-  EC2Database:
-    Type: AWS::EC2::Instance
+  EC2FrontEnd1:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
     Properties:
-      ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ]
-      KeyName: !Ref SSHKeyDatabase #Needed to authenticate onto this EC2 instance via SSH
-      InstanceType: !Ref EC2InstanceType
-      NetworkInterfaces:
-      - DeviceIndex: '0'
-        SubnetId: !GetAtt PrivateSubnet2.Outputs.StackSubnet
-        AssociatePublicIpAddress: false
-        GroupSet: [ !Ref SSHPublicSecurityGroup ] 
-      Tags:
-        - Key: Name
-          Value: !Join ['-', ["EC2", "Database", !Ref "AWS::StackName"]]
+      TemplateURL: !Ref FrontEndEC2TemplateURL
+      Parameters:
+        VPCReference: !GetAtt VPCStack.Outputs.VPCReference
+        SubnetReference: !GetAtt PublicSubnet2.Outputs.StackSubnet
+        EC2InstanceType: !Ref EC2InstanceType
+        SSHKeyName: !Ref SSHKeyFrontEnd
+        EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
+        JumpBoxSecurityGroupReference: !GetAtt EC2JumpBox1.Outputs.StackJumpBoxSecurityGroup
+        OutboundDBSecurityGroupReference: !GetAtt MySQLSG.Outputs.StackMySQLOutboundSecurityGroup
+        

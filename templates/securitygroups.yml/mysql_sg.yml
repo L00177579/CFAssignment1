@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: 2010-09-09
+#This template will deploy an EC2 instance for hosting an application.
+#This templates expects a Jump Box Security group used to SSH into the instance.
+
+Parameters:
+  VPCReference:
+    Description: Enter a reference to the subnet that requires routing.
+    Type: AWS::EC2::VPC::Id
+
+Resources:    
+  #Avoid circular dependencies!
+  MySQLOutboundIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      SourceSecurityGroupId: !Ref MySQLOutboundSecurityGroup
+      FromPort: 3306
+      IpProtocol: tcp
+      ToPort: 3306
+      GroupId: !Ref MySQLInboundSecurityGroup
+
+  #Avoid circular dependencies!
+  MySQLOutboundEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      SourceSecurityGroupId: !Ref MySQLInboundSecurityGroup 
+      FromPort: 3306
+      IpProtocol: tcp
+      ToPort: 3306
+      GroupId: !Ref MySQLOutboundSecurityGroup
+
+  MySQLInboundSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join ['-', ["SecurityGroup", "InboundDB", !Ref "AWS::StackName"]]
+      GroupDescription: Security Group Requirements for the Database.
+      VpcId: !Ref VPCReference
+
+  #To be used by other EC2 instances that require connection to the DB.
+  MySQLOutboundSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join ['-', ["SecurityGroup", "OutboundDB", !Ref "AWS::StackName"]]
+      GroupDescription: Security Group Requirements for other EC2 instances requiring access to the database.
+      VpcId: !Ref VPCReference
+
+Outputs:
+  StackMySQLInboundSecurityGroup:
+    Description: Reference to the newly created Inbound Database Security Group resource for use in the parent or other stacks.
+    Value: !Ref MySQLInboundSecurityGroup
+    Export: 
+      Name: !Join ['-', ["DBInSG", !Ref "AWS::StackName"]]
+  StackMySQLOutboundSecurityGroup:
+    Description: Reference to the newly created Outbound Database Security Group resource for use in the parent or other stacks.
+    Value: !Ref MySQLOutboundSecurityGroup
+    Export: 
+      Name: !Join ['-', ["DBOutSG", !Ref "AWS::StackName"]]

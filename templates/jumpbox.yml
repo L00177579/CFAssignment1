@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: 2010-09-09
+#This template will deploy an EC2 instance for hosting a jump box.
+#This will export its security group for use in other templates.
+
+Parameters:
+  VPCReference:
+    Description: Enter a reference to the subnet that requires routing.
+    Type: AWS::EC2::VPC::Id
+  SubnetReference:
+    Description: Enter a reference to an existing Subnet Id.
+    Type: String
+  EC2InstanceType:
+    Description: >-
+      Enter one of the default sizes: t1.micro or t2.micro. The default is set as t2.micro.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t1.micro
+      - t2.micro
+    ConstraintDescription: >-
+      Only t1.micro or t2.micro is available (Due to costs).
+  SSHKeyName:
+    Description: Name of the SSH Key Pair for the EC2 Jump Box Instance
+    Type: String
+    Default: SSHKey
+  EC2ImageId:
+    Description: The AMI for the EC2 instances; region based. Keep entry blank to attempt to automatically apply AMI based on region.
+    Type: String
+
+Resources:
+  #Jump server requires port 22 for SSH access.
+  #We could use our own IP range either at home or the office ip range.
+  JumpBoxSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join ['-', ["SecurityGroup", "JumpBox", !Ref "AWS::StackName"]]
+      GroupDescription: Security Group Requirements for the Jump Box.
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+      SecurityGroupEgress:
+        - CidrIp: 10.10.0.0/16
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+      VpcId: !Ref VPCReference
+
+  EC2JumpBox:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref EC2ImageId
+      KeyName: !Ref SSHKeyName #Needed to authenticate onto this EC2 instance via SSH
+      InstanceType: !Ref EC2InstanceType
+      NetworkInterfaces:
+      - DeviceIndex: '0'
+        SubnetId: !Ref SubnetReference
+        AssociatePublicIpAddress: true #ensure it has an public facing IP Address
+        GroupSet: [ !Ref JumpBoxSecurityGroup ]
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["EC2", "JumpBox", !Ref "AWS::StackName"]]
+
+Outputs:
+  StackJumpBoxSecurityGroup:
+    Description: Reference to the newly created Jump Box Security Group resource for use in the parent or other stacks.
+    Value: !Ref JumpBoxSecurityGroup
+    Export: 
+      Name: !Join ['-', ["JumpBoxSG", !Ref "AWS::StackName"]]

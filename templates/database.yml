@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: 2010-09-09
+#This template will deploy an EC2 instance for hosting an application.
+#This templates expects a Jump Box Security group used to SSH into the instance.
+
+Parameters:
+  VPCReference:
+    Description: Enter a reference to the subnet that requires routing.
+    Type: AWS::EC2::VPC::Id
+  SubnetReference:
+    Description: Enter a reference to an existing Subnet Id.
+    Type: String
+  EC2InstanceType:
+    Description: >-
+      Enter one of the default sizes: t1.micro or t2.micro. The default is set as t2.micro.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t1.micro
+      - t2.micro
+    ConstraintDescription: >-
+      Only t1.micro or t2.micro is available (Due to costs).
+  SSHKeyName:
+    Description: Name of the SSH Key Pair for the EC2 Jump Box Instance
+    Type: String
+    Default: SSHKey
+  EC2ImageId:
+    Description: The AMI for the EC2 instances; region based. Keep entry blank to attempt to automatically apply AMI based on region.
+    Type: String
+  JumpBoxSecurityGroupReference:
+    Description: Enter a reference to the jump box security group that needs SSH access.
+    Type: String
+  InboundDatabaseSecurityGroupReference:
+    Description: Enter a reference to the front end security group the database requires.
+    Type: String
+
+Resources:
+  #SSH Access
+  #HTTP and HTTPS ports for software updates etc.
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join ['-', ["SecurityGroup", "DB", !Ref "AWS::StackName"]]
+      GroupDescription: Security Group Requirements for the Database.
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref JumpBoxSecurityGroupReference #Reference the security group, any additional jump boxes will then be allowed to SSH in.
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0 #HTTP
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0 #HTTPS
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      VpcId: !Ref VPCReference
+
+  #The EC2 application hosted in the private subnet
+  EC2Database:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref EC2ImageId
+      KeyName: !Ref SSHKeyName #Needed to authenticate onto this EC2 instance via SSH
+      InstanceType: !Ref EC2InstanceType
+      NetworkInterfaces:
+      - DeviceIndex: '0'
+        SubnetId: !Ref SubnetReference
+        AssociatePublicIpAddress: false
+        GroupSet: 
+          - !Ref DBSecurityGroup
+          - !Ref InboundDatabaseSecurityGroupReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["EC2", "Database", !Ref "AWS::StackName"]]
+
+Outputs:
+  StackDBSecurityGroup:
+    Description: Reference to the newly created Database Security Group resource for use in the parent or other stacks.
+    Value: !Ref DBSecurityGroup
+    Export: 
+      Name: !Join ['-', ["DBSG", !Ref "AWS::StackName"]]
