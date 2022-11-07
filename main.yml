@@ -161,6 +161,8 @@ Resources:
       Parameters:
         VPCReference: !GetAtt VPCStack.Outputs.VPCReference
 
+  #This is a required instance for any other EC2 instances.
+  #This will be used to SSH onto other instances.
   EC2JumpBox1:
     Type: AWS::CloudFormation::Stack
     DependsOn: VPCStack
@@ -168,7 +170,7 @@ Resources:
       TemplateURL: !Ref JumpBoxEC2TemplateURL
       Parameters:
         VPCReference: !GetAtt VPCStack.Outputs.VPCReference
-        SubnetReference: !GetAtt PublicSubnet1.Outputs.StackSubnet
+        SubnetReference: !GetAtt PublicSubnet1.Outputs.StackSubnet #Jump box needs to be on the public subnet
         EC2InstanceType: !Ref EC2InstanceType
         SSHKeyName: !Ref SSHKeyJumpBox
         EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
@@ -180,7 +182,7 @@ Resources:
       TemplateURL: !Ref ApplicationEC2TemplateURL
       Parameters:
         VPCReference: !GetAtt VPCStack.Outputs.VPCReference
-        SubnetReference: !GetAtt PrivateSubnet1.Outputs.StackSubnet
+        SubnetReference: !GetAtt PrivateSubnet1.Outputs.StackSubnet #Application to be hosted on the private subnet
         EC2InstanceType: !Ref EC2InstanceType
         SSHKeyName: !Ref SSHKeyApplication
         EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
@@ -193,7 +195,7 @@ Resources:
       TemplateURL: !Ref DBEC2TemplateURL
       Parameters:
         VPCReference: !GetAtt VPCStack.Outputs.VPCReference
-        SubnetReference: !GetAtt PrivateSubnet1.Outputs.StackSubnet
+        SubnetReference: !GetAtt PrivateSubnet2.Outputs.StackSubnet #Database to be hosted on the private subnet
         EC2InstanceType: !Ref EC2InstanceType
         SSHKeyName: !Ref SSHKeyDatabase
         EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
@@ -207,7 +209,7 @@ Resources:
       TemplateURL: !Ref FrontEndEC2TemplateURL
       Parameters:
         VPCReference: !GetAtt VPCStack.Outputs.VPCReference
-        SubnetReference: !GetAtt PublicSubnet2.Outputs.StackSubnet
+        SubnetReference: !GetAtt PublicSubnet2.Outputs.StackSubnet #Front end needs to be publicly accessible
         EC2InstanceType: !Ref EC2InstanceType
         SSHKeyName: !Ref SSHKeyFrontEnd
         EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
