@@ -206,6 +206,7 @@ Resources:
         EC2InstanceType: !Ref EC2InstanceType
         SSHKeyName: !Ref SSHKeyJumpBox
         EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
+        VPCCIDR: !Ref VPCCIDR
 
   EC2Application1:
     Type: AWS::CloudFormation::Stack
