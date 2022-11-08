@@ -31,6 +31,36 @@ Parameters:
     Description: s3 Bucket URL for the MySQL Security Group cloud formation template.
     Type: String
     Default: https://cf-templates-1ptll2eogk9j2-us-east-1.s3.amazonaws.com/mysql_sg.yml
+  VPCCIDR:
+    Description: Please enter an IP range for the VPC
+    Type: String
+    Default: 10.10.0.0/16
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([1][6-9]|[2][0-8]))$
+    ConstraintDescription: VPCCIDR parameter must be set to the following pattern X.X.X.X/16-28
+  PublicSubnetCIDR1:
+    Description: Please enter an IP range for the first public subnet
+    Type: String
+    Default: 10.10.3.0/24
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([1][6-9]|[2][0-8]))$
+    ConstraintDescription: PublicSubnetCIDR1 parameter must be set to the following pattern X.X.X.X/16-28
+  PublicSubnetCIDR2:
+    Description: Please enter an IP range for the second public subnet
+    Type: String
+    Default: 10.10.4.0/24
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([1][6-9]|[2][0-8]))$
+    ConstraintDescription: PublicSubnetCIDR2 parameter must be set to the following pattern X.X.X.X/16-28
+  PrivateSubnetCIDR1:
+    Description: Please enter an IP range for the first private subnet
+    Type: String
+    Default: 10.10.1.0/24
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([1][6-9]|[2][0-8]))$
+    ConstraintDescription: PrivateSubnetCIDR1 parameter must be set to the following pattern X.X.X.X/16-28
+  PrivateSubnetCIDR2:
+    Description: Please enter an IP range for the second private subnet
+    Type: String
+    Default: 10.10.2.0/24
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([1][6-9]|[2][0-8]))$
+    ConstraintDescription: PrivateSubnetCIDR2 parameter must be set to the following pattern X.X.X.X/16-28
   SSHKeyJumpBox:
     Description: Name of the SSH Key Pair for the EC2 Jump Box Instance
     Type: String
@@ -91,7 +121,7 @@ Resources:
     Properties:
       TemplateURL: !Ref VPCTemplateURL
       Parameters:
-        VPCCidrBlock: 10.10.0.0/16
+        VPCCidrBlock: !Ref VPCCIDR
 
   #The first public subnet.
   #This subnet will create the the NAT Gateway to be used by the private subnets.
@@ -107,7 +137,7 @@ Resources:
         InternetGatewayReference: !GetAtt VPCStack.Outputs.InternetGatewayReference
         SelectAZ: 1
         CreateNATAndEIP: true
-        SubnetCidrBlock: 10.10.3.0/24
+        SubnetCidrBlock: !Ref PublicSubnetCIDR1
         RouteCidrBlock: 0.0.0.0/0
 
   PrivateSubnet1:
@@ -121,7 +151,7 @@ Resources:
         NATGatewayReference: !GetAtt PublicSubnet1.Outputs.StackNATGateway
         SelectAZ: 0
         CreateNATAndEIP: false #Only build the NAT for this one to save on costs
-        SubnetCidrBlock: 10.10.1.0/24
+        SubnetCidrBlock: !Ref PrivateSubnetCIDR1
         RouteCidrBlock: 0.0.0.0/0
 
   PrivateSubnet2:
@@ -135,7 +165,7 @@ Resources:
         NATGatewayReference: !GetAtt PublicSubnet1.Outputs.StackNATGateway
         SelectAZ: 0
         CreateNATAndEIP: false
-        SubnetCidrBlock: 10.10.2.0/24
+        SubnetCidrBlock: !Ref PrivateSubnetCIDR2
         RouteCidrBlock: 0.0.0.0/0
 
   PublicSubnet2:
@@ -149,7 +179,7 @@ Resources:
         InternetGatewayReference: !GetAtt VPCStack.Outputs.InternetGatewayReference
         SelectAZ: 1
         CreateNATAndEIP: false
-        SubnetCidrBlock: 10.10.4.0/24
+        SubnetCidrBlock: !Ref PublicSubnetCIDR2
         RouteCidrBlock: 0.0.0.0/0
 
   #MySQL Security Group
@@ -174,6 +204,7 @@ Resources:
         EC2InstanceType: !Ref EC2InstanceType
         SSHKeyName: !Ref SSHKeyJumpBox
         EC2ImageId: !If [ FindAMIByRegion, !FindInMap [ AMIRegionImage, !Ref "AWS::Region", AMIId ], !Ref EC2ImageId ] #Find a suitable AMI based on the region, override with passed in AMI
+        VPCCIDR: !Ref VPCCIDR
 
   EC2Application1:
     Type: AWS::CloudFormation::Stack

@@ -26,6 +26,12 @@ Parameters:
   EC2ImageId:
     Description: The AMI for the EC2 instances; region based. Keep entry blank to attempt to automatically apply AMI based on region.
     Type: String
+  VPCCIDR:
+    Description: Please enter an IP range for the VPC
+    Type: String
+    Default: 10.10.0.0/16
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([1][6-9]|[2][0-8]))$
+    ConstraintDescription: VPCCIDR parameter must be set to the following pattern X.X.X.X/16-28
 
 Resources:
   #Jump server requires port 22 for SSH access.
@@ -41,7 +47,7 @@ Resources:
           IpProtocol: tcp
           ToPort: 22
       SecurityGroupEgress:
-        - CidrIp: 10.10.0.0/16
+        - CidrIp: !VPCCIDR #need to reference all of the VPC
           FromPort: 22
           IpProtocol: tcp
           ToPort: 22
