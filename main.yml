@@ -150,7 +150,7 @@ Resources:
         SubnetType: private
         VPCReference: !GetAtt VPCStack.Outputs.VPCReference
         NATGatewayReference: !GetAtt PublicSubnet1.Outputs.StackNATGateway
-        SelectAZ: 0
+        SelectAZ: 1
         CreateNATAndEIP: false #Only build the NAT for this one to save on costs
         SubnetCidrBlock: !Ref PrivateSubnetCIDR1
         RouteCidrBlock: 0.0.0.0/0
@@ -180,7 +180,7 @@ Resources:
         SubnetType: public
         VPCReference: !GetAtt VPCStack.Outputs.VPCReference
         InternetGatewayReference: !GetAtt VPCStack.Outputs.InternetGatewayReference
-        SelectAZ: 1
+        SelectAZ: 0
         CreateNATAndEIP: false
         SubnetCidrBlock: !Ref PublicSubnetCIDR2
         RouteCidrBlock: 0.0.0.0/0
