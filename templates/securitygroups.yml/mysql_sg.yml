@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
-#This template will deploy an EC2 instance for hosting an application.
-#This templates expects a Jump Box Security group used to SSH into the instance.
+#This template has the necessary security groups required to allow inbound and outbound for a MySQL database.
+#The outputs from this template can be used in other stacks to enable MySQL connectivity between EC2 instances.
 
 Parameters:
   VPCReference:
@@ -34,6 +34,9 @@ Resources:
       GroupName: !Join ['-', ["SecurityGroup", "InboundDB", !Ref "AWS::StackName"]]
       GroupDescription: Security Group Requirements for the Database.
       VpcId: !Ref VPCReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["MySQLInbound", "SecurityGroup", !Ref "AWS::StackName"]]
 
   #To be used by other EC2 instances that require connection to the DB.
   MySQLOutboundSecurityGroup:
@@ -42,6 +45,9 @@ Resources:
       GroupName: !Join ['-', ["SecurityGroup", "OutboundDB", !Ref "AWS::StackName"]]
       GroupDescription: Security Group Requirements for other EC2 instances requiring access to the database.
       VpcId: !Ref VPCReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["MySQLOutbound", "SecurityGroup", !Ref "AWS::StackName"]]
 
 Outputs:
   StackMySQLInboundSecurityGroup:

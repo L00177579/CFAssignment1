@@ -54,6 +54,9 @@ Resources:
           IpProtocol: tcp
           ToPort: 443
       VpcId: !Ref VPCReference
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ["ApplicationEC2", "SecurityGroup", !Ref "AWS::StackName"]]
 
   #The EC2 application hosted in the private subnet
   EC2Application:
